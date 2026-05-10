@@ -3,6 +3,7 @@ import os
 from sqlalchemy import Column, Integer, String, Text, DateTime, func, select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
+from pydantic import BaseModel, Field, field_validator, ValidationError
 
 # Настройка подключения к PostgreSQL
 database_url = os.environ.get("DATABASE_URL")
@@ -32,11 +33,16 @@ class Ad(Base):
     created_at = Column(DateTime, default=func.now(), nullable=False)
     owner = Column(String(100), nullable=False)
 
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "title": self.title,
-            "description": self.description,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "owner": self.owner,
-        }
+
+# --- Схемы Pydantic ---
+class AdSchema(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=1, max_length=300)
+    owner: str = Field(min_length=1, max_length=100)
+
+    @field_validator('title', 'description', 'owner', mode='before')
+    @classmethod
+    def strip_ws(cls, v):
+        if isinstance(v, str): v = v.strip()
+        if not v: raise ValueError('Поле не может быть пустым или состоять из пробелов')
+        return v
