@@ -1,5 +1,5 @@
 import os
-
+from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, func, select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -18,12 +18,15 @@ else:
     db = os.environ.get("POSTGRES_DB", "ads_db")
     database_url = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"
 
+
+# Асинхронный движок
 engine = create_async_engine(database_url, echo=False)
+# Фабрика сессий
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 Base = declarative_base()
 
-
+#---- Модель база данных ----
 class Ad(Base):
     __tablename__ = "ads"
 
@@ -36,6 +39,7 @@ class Ad(Base):
 
 # --- Схемы Pydantic ---
 class AdSchema(BaseModel):
+    """Базовая схема валидации полей объявления."""
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=300)
     owner: str = Field(min_length=1, max_length=100)
@@ -43,6 +47,27 @@ class AdSchema(BaseModel):
     @field_validator('title', 'description', 'owner', mode='before')
     @classmethod
     def strip_ws(cls, v):
-        if isinstance(v, str): v = v.strip()
-        if not v: raise ValueError('Поле не может быть пустым или состоять из пробелов')
+        """Обрезает пробелы по краям и запрещает строки, состоящие только из пробелов."""
+        if isinstance(v, str):
+            v = v.strip()
+        if not v:
+            raise ValueError('Поле не может быть пустым или состоять из пробелов')
         return v
+
+class AdCreate(AdSchema):
+    """Схема для создания объявления (все поля обязательны)."""
+    pass
+
+class AdUpdate(AdSchema):
+    """Схема для обновления объявления (все поля опциональны)."""
+    title: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = Field(None, min_length=1, max_length=300)
+    owner: str | None = Field(None, min_length=1, max_length=100)
+
+class AdResponse(BaseModel):
+    """Схема для ответа API (включает id и дату создания)."""
+    id: int
+    title: str
+    description: str
+    created_at: datetime | None
+    owner: str
