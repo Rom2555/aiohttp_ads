@@ -46,6 +46,7 @@ class AdSchema(BaseModel):
     description: str = Field(min_length=1, max_length=300)
     owner: str = Field(min_length=1, max_length=100)
 
+    # Вспомогательный метод. Работает до базовой проверки.
     @field_validator('title', 'description', 'owner', mode='before')
     @classmethod
     def strip_ws(cls, v):
@@ -56,8 +57,10 @@ class AdSchema(BaseModel):
             raise ValueError('Поле не может быть пустым или состоять из пробелов')
         return v
 
+
 class AdCreate(AdSchema):
     """Схема для создания объявления"""
+# Копия всех правил из AdSchema. Для POST запроса.
     pass
 
 class AdUpdate(AdSchema):
