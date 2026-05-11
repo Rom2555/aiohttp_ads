@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 
@@ -20,13 +21,13 @@ else:
     db = os.environ.get("POSTGRES_DB", "ads_db")
     database_url = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"
 
-
 # Асинхронный движок
 engine = create_async_engine(database_url, echo=False)
 # Фабрика сессий
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 Base = declarative_base()
+
 
 # Модель база данных
 class Ad(Base):
@@ -60,14 +61,16 @@ class AdSchema(BaseModel):
 
 class AdCreate(AdSchema):
     """Схема для создания объявления"""
-# Копия всех правил из AdSchema. Для POST запроса.
+    # Копия всех правил из AdSchema. Для POST запроса.
     pass
+
 
 class AdUpdate(AdSchema):
     """Схема для обновления объявления"""
     title: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = Field(None, min_length=1, max_length=300)
     owner: str | None = Field(None, min_length=1, max_length=100)
+
 
 class AdResponse(BaseModel):
     """Схема для ответа API"""
@@ -76,6 +79,16 @@ class AdResponse(BaseModel):
     description: str
     created_at: datetime | None
     owner: str
+
+
+# Вспомогательная функция
+def error(status: int, msg: str) -> None:
+    """
+    Выбрасывает HTTP исключение с JSON-оном.
+    Прерывает выполнение хэндлера и выдает ответ клиенту.
+    """
+    exc = web.HTTPBadRequest if status == 400 else web.HTTPNotFound
+    raise exc(text=json.dumps({"error": msg}), content_type='application/json')
 
 
 # Middleware
@@ -101,10 +114,10 @@ async def db_middleware(request: web.Request, handler):
             await session.rollback()
             raise
 
+
 # Инициализация приложения и подключение middleware
 app = web.Application()
 app.middlewares.append(db_middleware)
-
 
 
 # Обработчики роутов
@@ -112,26 +125,52 @@ async def health(request: web.Request) -> web.Response:
     """Проверка работоспособности сервера"""
     return web.json_response({"status": "ok"})
 
+
 async def list_ads(request: web.Request) -> web.Response:
     """Возвращает список всех объявлений."""
-    pass
+    res = await request['db'].execute(select(Ad))
+    ads = res.scalars().all()
+
+    # Сериализатор списка через Pydantic
+    return web.json_response({
+        "ads": [AdResponse.model_validate(ad).model_dump() for ad in ads]
+    })
+
 
 async def create_ad(request: web.Request) -> web.Response:
     """Создает новое объявление."""
-    pass
+    try:
+        # Проверка входящих данных через Pydantic
+        data = AdCreate(**await request.json())
+    except (json.JSONDecodeError, ValueError):
+        error(400, "Неверный JSON")
+    except ValidationError as e:
+        # Первая ошибка от Pydantic
+        error(400, e.errors()[0]['msg'])
+
+        # Создаем объект модели и добавляем в сессию
+    ad = Ad(**data.model_dump())
+    request['db'].add(ad)
+
+    # Flush, чтобы БД выдала id до коммита
+    await request['db'].flush()
+
+    return web.json_response(AdResponse.model_validate(ad).model_dump(), status=201)
+
 
 async def get_ad(request: web.Request) -> web.Response:
     """Возвращает данные одного объявления по ID."""
     pass
 
+
 async def update_ad(request: web.Request) -> web.Response:
     """Обновляет данные существующего объявления."""
     pass
 
+
 async def delete_ad(request: web.Request) -> web.Response:
     """Удаляет объявление по ID."""
     pass
-
 
 
 # Регистрация маршрутов и запуск
