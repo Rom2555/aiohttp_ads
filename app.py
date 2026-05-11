@@ -1,5 +1,7 @@
 import os
 from datetime import datetime
+
+from aiohttp import web
 from sqlalchemy import Column, Integer, String, Text, DateTime, func, select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -26,7 +28,7 @@ async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False
 
 Base = declarative_base()
 
-#---- Модель база данных ----
+# Модель база данных
 class Ad(Base):
     __tablename__ = "ads"
 
@@ -37,7 +39,7 @@ class Ad(Base):
     owner = Column(String(100), nullable=False)
 
 
-# --- Схемы Pydantic ---
+# Схемы Pydantic
 class AdSchema(BaseModel):
     """Базовая схема валидации полей объявления."""
     title: str = Field(min_length=1, max_length=200)
@@ -55,19 +57,87 @@ class AdSchema(BaseModel):
         return v
 
 class AdCreate(AdSchema):
-    """Схема для создания объявления (все поля обязательны)."""
+    """Схема для создания объявления"""
     pass
 
 class AdUpdate(AdSchema):
-    """Схема для обновления объявления (все поля опциональны)."""
+    """Схема для обновления объявления"""
     title: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = Field(None, min_length=1, max_length=300)
     owner: str | None = Field(None, min_length=1, max_length=100)
 
 class AdResponse(BaseModel):
-    """Схема для ответа API (включает id и дату создания)."""
+    """Схема для ответа API"""
     id: int
     title: str
     description: str
     created_at: datetime | None
     owner: str
+
+
+# Middleware
+@web.middleware
+async def db_middleware(request: web.Request, handler):
+    """
+    Middleware для управления сессией БД.
+    Открывает сессию, передает её в request, коммит при успешном ответе, откат при ошибке.
+    """
+    async with async_session() as session:
+        request['db'] = session
+        try:
+            resp = await handler(request)
+            # Коммит если статус ответа успешный (2xx)
+            if 200 <= resp.status < 300:
+                await session.commit()
+            return resp
+        except web.HTTPException:
+            # HTTP ошибки (400, 404)
+            raise
+        except Exception:
+            # Все остальные ошибки - аварийное завершение, откат
+            await session.rollback()
+            raise
+
+# Инициализация приложения и подключение middleware
+app = web.Application()
+app.middlewares.append(db_middleware)
+
+
+
+# Обработчики роутов
+async def health(request: web.Request) -> web.Response:
+    """Проверка работоспособности сервера"""
+    return web.json_response({"status": "ok"})
+
+async def list_ads(request: web.Request) -> web.Response:
+    """Возвращает список всех объявлений."""
+    pass
+
+async def create_ad(request: web.Request) -> web.Response:
+    """Создает новое объявление."""
+    pass
+
+async def get_ad(request: web.Request) -> web.Response:
+    """Возвращает данные одного объявления по ID."""
+    pass
+
+async def update_ad(request: web.Request) -> web.Response:
+    """Обновляет данные существующего объявления."""
+    pass
+
+async def delete_ad(request: web.Request) -> web.Response:
+    """Удаляет объявление по ID."""
+    pass
+
+
+
+# Регистрация маршрутов и запуск
+app.router.add_get('/health', health)
+app.router.add_get('/ads', list_ads)
+app.router.add_post('/ads', create_ad)
+app.router.add_get('/ads/{ad_id}', get_ad)
+app.router.add_patch('/ads/{ad_id}', update_ad)
+app.router.add_delete('/ads/{ad_id}', delete_ad)
+
+if __name__ == '__main__':
+    web.run_app(app, host='0.0.0.0', port=8080)
