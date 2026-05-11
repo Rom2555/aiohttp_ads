@@ -3,14 +3,12 @@ version: '3.8'
 services:
   db:
     image: postgres:15-alpine
-    # Подтягиваем переменные из .env для создания БД
     env_file:
       - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-    # Используем переменные из .env для проверки здоровья БД
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -20,17 +18,13 @@ services:
     build: .
     ports:
       - "8080:8080"
-    # Подтягиваем переменные из .env в приложение
     env_file:
       - .env
     environment:
-      # Переопределяем хост: внутри Docker-сети приложение должно
-      # обращаться к БД по имени сервиса 'db', а не localhost
       POSTGRES_HOST: db
     depends_on:
       db:
         condition: service_healthy
-    # Сначала инициализируем БД, затем запускаем сервер
     command: ["sh", "-c", "python init_db.py && python app.py"]
 
 volumes:

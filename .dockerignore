@@ -29,12 +29,12 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Docker файлы (их не нужно копировать внутрь образа)
+# Docker файлы
 Dockerfile
 docker-compose.yml
 .dockerignore
 
-# Документация и тесты (в рабочем контейнере они не нужны)
+# Документация и тесты
 README.md
 http_test_api.http
 *.md
