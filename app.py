@@ -91,6 +91,23 @@ def error(status: int, msg: str) -> None:
     raise exc(text=json.dumps({"error": msg}), content_type='application/json')
 
 
+async def get_ad_obj(request: web.Request) -> Ad:
+    """
+    Извлекает ID из URL, ищет объявление в БД.
+    Если ID не найден или некорректен - выбрасывает ошибку.
+    """
+    try:
+        ad_id = int(request.match_info['ad_id'])
+    except ValueError:
+        error(400, "Неверный ID")
+
+    # Быстрый поиск по Primary Key в сессии
+    ad = await request['db'].get(Ad, ad_id)
+    if not ad:
+        error(404, "Объявление не найдено")
+    return ad
+
+
 # Middleware
 @web.middleware
 async def db_middleware(request: web.Request, handler):
@@ -160,7 +177,8 @@ async def create_ad(request: web.Request) -> web.Response:
 
 async def get_ad(request: web.Request) -> web.Response:
     """Возвращает данные одного объявления по ID."""
-    pass
+    ad = await get_ad_obj(request)
+    return web.json_response(AdResponse.model_validate(ad).model_dump())
 
 
 async def update_ad(request: web.Request) -> web.Response:
@@ -170,7 +188,9 @@ async def update_ad(request: web.Request) -> web.Response:
 
 async def delete_ad(request: web.Request) -> web.Response:
     """Удаляет объявление по ID."""
-    pass
+    await request['db'].delete(await get_ad_obj(request))
+    # 204 No Content - ответ при успешном удалении
+    return web.Response(status=204)
 
 
 # Регистрация маршрутов и запуск
