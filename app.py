@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 
-from aiohttp import web
+from aiohttp import web, ContentTypeError
 from sqlalchemy import Column, Integer, String, Text, DateTime, func, select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -84,7 +84,7 @@ class AdResponse(BaseModel):
 # Вспомогательная функция
 def error(status: int, msg: str) -> None:
     """
-    Выбрасывает HTTP исключение с JSON-оном.
+    Выбрасывает HTTP исключение с JSON.
     Прерывает выполнение хэндлера и выдает ответ клиенту.
     """
     exc = web.HTTPBadRequest if status == 400 else web.HTTPNotFound
@@ -150,7 +150,7 @@ async def list_ads(request: web.Request) -> web.Response:
 
     # Сериализатор списка через Pydantic
     return web.json_response({
-        "ads": [AdResponse.model_validate(ad).model_dump() for ad in ads]
+        "ads": [AdResponse.model_validate(ad).model_dump(mode='json') for ad in ads]
     })
 
 
@@ -159,31 +159,46 @@ async def create_ad(request: web.Request) -> web.Response:
     try:
         # Проверка входящих данных через Pydantic
         data = AdCreate(**await request.json())
-    except (json.JSONDecodeError, ValueError):
-        error(400, "Неверный JSON")
+    except (json.JSONDecodeError, ValueError, ContentTypeError):
+        error(400, "Неверный JSON или Content-Type")
     except ValidationError as e:
         # Первая ошибка от Pydantic
         error(400, e.errors()[0]['msg'])
 
-        # Создаем объект модели и добавляем в сессию
     ad = Ad(**data.model_dump())
     request['db'].add(ad)
 
     # Flush, чтобы БД выдала id до коммита
     await request['db'].flush()
 
-    return web.json_response(AdResponse.model_validate(ad).model_dump(), status=201)
+    return web.json_response(AdResponse.model_validate(ad).model_dump(mode='json'), status=201)
 
 
 async def get_ad(request: web.Request) -> web.Response:
     """Возвращает данные одного объявления по ID."""
     ad = await get_ad_obj(request)
-    return web.json_response(AdResponse.model_validate(ad).model_dump())
+    return web.json_response(AdResponse.model_validate(ad).model_dump(mode='json'))
 
 
 async def update_ad(request: web.Request) -> web.Response:
     """Обновляет данные существующего объявления."""
-    pass
+    ad = await get_ad_obj(request)
+
+    try:
+        raw = await request.json()
+        if not raw:
+            error(400, "Нет данных для обновления")
+        data = AdUpdate.model_validate(raw)
+    except (json.JSONDecodeError, ValueError, ContentTypeError):
+        error(400, "Неверный JSON или Content-Type")
+    except ValidationError as e:
+        error(400, e.errors()[0]['msg'])
+
+    # Обновление атрибутов объекта модели
+    for k, v in data.model_dump(exclude_unset=True).items():
+        setattr(ad, k, v)
+
+    return web.json_response(AdResponse.model_validate(ad).model_dump(mode='json'))
 
 
 async def delete_ad(request: web.Request) -> web.Response:
