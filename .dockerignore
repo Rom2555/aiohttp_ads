@@ -1,0 +1,40 @@
+# Окружение и секреты
+.env
+.env.*
+
+# Виртуальное окружение Python
+venv/
+env/
+.venv/
+
+# Кэш Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# Файлы системы контроля версий
+.git/
+.gitignore
+
+# Файлы IDE (PyCharm, VSCode)
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Файлы операционной системы
+.DS_Store
+Thumbs.db
+
+# Docker файлы (их не нужно копировать внутрь образа)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Документация и тесты (в рабочем контейнере они не нужны)
+README.md
+http_test_api.http
+*.md
