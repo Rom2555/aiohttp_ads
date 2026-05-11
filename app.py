@@ -6,7 +6,7 @@ from aiohttp import web, ContentTypeError
 from sqlalchemy import Column, Integer, String, Text, DateTime, func, select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
-from pydantic import BaseModel, Field, field_validator, ValidationError
+from pydantic import BaseModel, Field, field_validator, ValidationError, ConfigDict
 
 # Настройка подключения к PostgreSQL
 database_url = os.environ.get("DATABASE_URL")
@@ -74,6 +74,8 @@ class AdUpdate(AdSchema):
 
 class AdResponse(BaseModel):
     """Схема для ответа API"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
     description: str
