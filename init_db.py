@@ -1,5 +1,7 @@
 import asyncio
+
 from app import Base, engine
+
 
 async def init():
     try:
@@ -9,5 +11,6 @@ async def init():
     except Exception as e:
         print(f"Ошибка при создании таблиц: {e}")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     asyncio.run(init())
